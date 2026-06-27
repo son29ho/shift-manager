@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>シフト管理・給与計算</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;background:#f5f5f7;color:#1a1a1a;font-size:15px;padding-bottom:70px}
+input,select,button{font-family:inherit;-webkit-appearance:none;appearance:none}
+/* topbar */
+.topbar{background:#fff;border-bottom:1px solid #e0e0e0;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:20}
+.topbar-title{font-size:16px;font-weight:600}
+.topbar-right{display:flex;gap:8px;align-items:center}
+.sync-btn{font-size:12px;padding:5px 12px;border:1px solid #0071e3;border-radius:8px;background:#fff;color:#0071e3;cursor:pointer}
+.sync-btn.saving{color:#888;border-color:#ccc;pointer-events:none}
+/* toast */
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;font-size:13px;padding:9px 18px;border-radius:20px;z-index:100;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1}
+/* bottom nav */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #e0e0e0;display:flex;z-index:20}
+.nav-btn{flex:1;padding:9px 0 7px;font-size:10px;font-weight:500;border:none;background:transparent;color:#888;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
+.nav-btn .nav-icon{font-size:18px;line-height:1}
+.nav-btn.active{color:#0071e3}
+/* job selector bar */
+.job-bar{background:#fff;border-bottom:1px solid #e0e0e0;padding:8px 14px;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
+.job-bar::-webkit-scrollbar{display:none}
+.job-chip{display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:500;padding:5px 12px;border-radius:20px;border:1.5px solid #e0e0e0;background:#fff;color:#555;cursor:pointer;margin-right:6px}
+.job-chip.active{color:#fff;border-color:transparent}
+.job-chip .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+/* summary */
+.summary-wrap{padding:10px 14px;background:#f5f5f7}
+.summary-total{background:#fff;border-radius:12px;padding:12px 14px;margin-bottom:8px}
+.summary-total-label{font-size:11px;color:#888;margin-bottom:4px}
+.summary-total-row{display:flex;justify-content:space-between;align-items:baseline}
+.summary-total-val{font-size:24px;font-weight:700;color:#0071e3}
+.summary-total-sub{font-size:12px;color:#888}
+.job-summaries{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.job-sum-card{background:#fff;border-radius:10px;padding:10px 12px;border-left:4px solid #ccc}
+.job-sum-name{font-size:11px;font-weight:600;color:#555;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.job-sum-amt{font-size:16px;font-weight:700;color:#1a1a1a}
+.job-sum-sub{font-size:10px;color:#aaa;margin-top:2px}
+/* section */
+.section{padding:10px 14px 0}
+.section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.section-label{font-size:13px;font-weight:600;color:#888}
+.cfg-toggle{font-size:13px;color:#0071e3;background:none;border:none;cursor:pointer}
+/* card */
+.card{background:#fff;border-radius:12px;border:1px solid #e8e8e8;overflow:hidden;margin-bottom:8px}
+.card-row{display:flex;justify-content:space-between;align-items:center;padding:11px 14px;border-bottom:1px solid #f0f0f0}
+.card-row:last-child{border-bottom:none}
+.row-label{font-size:14px;color:#555}
+.row-label small{display:block;font-size:11px;color:#aaa;margin-top:1px}
+.row-ctrl{display:flex;align-items:center;gap:6px}
+/* inputs */
+input[type=number],input[type=time],input[type=date],select,input[type=text]{font-size:14px;padding:5px 9px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#1a1a1a;height:36px}
+input[type=number]{width:88px;text-align:right}
+input[type=date]{width:144px}
+input[type=time]{width:108px}
+input[type=text]{width:160px}
+input[type=color]{width:44px;height:36px;padding:2px;border:1px solid #ddd;border-radius:8px;cursor:pointer;background:#fff}
+select{padding-right:26px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 7px center;min-width:120px}
+input[type=checkbox]{-webkit-appearance:checkbox;appearance:checkbox;width:18px;height:18px}
+.up-row{display:flex;justify-content:space-between;align-items:center;padding:9px 14px;border-bottom:1px solid #f0f0f0}
+.up-row:last-child{border-bottom:none}
+.up-ctrl{display:flex;align-items:center;gap:7px}
+.up-ctrl input[type=number]{width:72px}
+.up-ctrl label{display:flex;align-items:center;gap:4px;font-size:13px;color:#555}
+/* job editor */
+.job-edit-card{background:#fff;border-radius:12px;border:1px solid #e8e8e8;margin-bottom:10px;overflow:hidden}
+.job-edit-header{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid #f0f0f0}
+.job-edit-name{font-size:14px;font-weight:600;display:flex;align-items:center;gap:7px}
+.job-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+.job-edit-btns{display:flex;gap:6px}
+.btn-sm{font-size:12px;padding:4px 10px;border-radius:7px;cursor:pointer;min-height:30px;border:1px solid}
+.btn-edit{background:#f0f7ff;border-color:#b3d4f5;color:#0071e3}
+.btn-del-job{background:#fff5f5;border-color:#ffcccc;color:#c62828}
+.job-edit-body{padding:10px 14px;display:none}
+/* shift card */
+.shift-card{background:#fff;border-radius:12px;border:1px solid #e8e8e8;margin-bottom:10px;overflow:hidden}
+.shift-card.ot{border-left:4px solid #e05a00}
+.shift-card.night{border-left:4px solid #185FA5}
+.shift-card.paid{border-left:4px solid #34a853}
+.shift-header{display:flex;justify-content:space-between;align-items:center;padding:9px 13px;border-bottom:1px solid #f0f0f0;flex-wrap:wrap;gap:6px}
+.shift-header-left{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.day-badge{font-size:12px;font-weight:600;padding:2px 8px;border-radius:20px;background:#f0f0f0;color:#555}
+.day-badge.we{background:#e8f0fe;color:#1a56db}
+.day-badge.hol{background:#fce8e8;color:#c62828}
+.job-tag{font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;color:#fff}
+.del-btn{background:none;border:1px solid #ffcccc;border-radius:7px;color:#e03030;font-size:12px;padding:4px 9px;cursor:pointer}
+.shift-body{padding:9px 13px}
+.time-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:9px}
+.time-field label{display:block;font-size:12px;color:#888;margin-bottom:3px}
+.time-field input,.time-field select{width:100%}
+.brk-row{display:flex;align-items:center;gap:7px;padding:5px 0;flex-wrap:wrap}
+.brk-label{font-size:13px;color:#555}
+.brk-btn{font-size:12px;padding:4px 10px;border-radius:7px;cursor:pointer;min-height:30px;border:1px solid}
+.brk-btn.del{background:#fff5f5;border-color:#ffcccc;color:#c62828}
+.brk-btn.add{background:#e8f4fd;border-color:#b3d9f5;color:#0071e3}
+.shift-footer{display:flex;justify-content:space-between;align-items:flex-end;padding:9px 13px;border-top:1px solid #f0f0f0;flex-wrap:wrap;gap:5px}
+.amount{font-size:20px;font-weight:700;color:#1a1a1a}
+.amount.ot{color:#e05a00}
+.amount.paid{color:#34a853}
+.pills{display:flex;flex-wrap:wrap;gap:4px}
+.pill{font-size:11px;padding:2px 8px;border-radius:20px;white-space:nowrap}
+.pill.work{background:#f0f0f0;color:#555}
+.pill.ot{background:#fff0e6;color:#c44a00}
+.pill.night{background:#e8f0fe;color:#1a56db}
+.pill.up{background:#e6f4ea;color:#1e7e34}
+/* add buttons */
+.add-btn{width:100%;background:#0071e3;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;padding:13px;cursor:pointer;margin-top:4px}
+.add-btn:active{opacity:.8}
+.add-btn-outline{width:100%;background:#fff;color:#0071e3;border:1.5px solid #0071e3;border-radius:12px;font-size:15px;font-weight:600;padding:13px;cursor:pointer;margin-top:8px}
+/* setup/error */
+.setup-card{background:#fff8e1;border:1px solid #ffe082;border-radius:12px;padding:13px 15px;margin:10px 14px 0;font-size:13px;color:#7a5c00;line-height:1.7}
+.gas-input{width:100%;font-size:13px;padding:7px 9px;border:1px solid #ddd;border-radius:8px;margin-top:7px;background:#fff;color:#1a1a1a;height:38px}
+.gas-save-btn{margin-top:7px;width:100%;background:#0071e3;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;padding:9px;cursor:pointer}
+.loading{text-align:center;padding:28px;color:#aaa;font-size:14px}
+.err-card{background:#fff5f5;border:1px solid #ffcccc;border-radius:12px;padding:11px 13px;margin-bottom:10px;font-size:13px;color:#c62828;line-height:1.6}
+.hint{font-size:11px;color:#aaa;padding:7px 13px;line-height:1.7}
+/* calendar */
+.cal-nav{display:flex;justify-content:space-between;align-items:center;padding:9px 14px;background:#fff;border-bottom:1px solid #f0f0f0;position:sticky;top:57px;z-index:9}
+.cal-month{font-size:15px;font-weight:600}
+.cal-nav-btn{background:none;border:1px solid #ddd;border-radius:8px;font-size:17px;width:34px;height:34px;cursor:pointer;color:#555;display:flex;align-items:center;justify-content:center}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);background:#fff}
+.cal-dow{text-align:center;font-size:11px;font-weight:600;padding:5px 0;color:#888}
+.cal-dow:first-child{color:#e03030}
+.cal-dow:last-child{color:#0071e3}
+.cal-cell{min-height:68px;border-right:0.5px solid #f0f0f0;border-bottom:0.5px solid #f0f0f0;padding:3px 2px;background:#fff}
+.cal-cell:nth-child(7n){border-right:none}
+.cal-cell.other-month .cal-day{color:#ccc}
+.cal-cell.today{background:#f0f7ff}
+.cal-day{font-size:12px;font-weight:500;text-align:center;margin-bottom:2px}
+.cal-cell.sun .cal-day,.cal-cell.hol .cal-day{color:#e03030}
+.cal-cell.sat .cal-day{color:#0071e3}
+.cal-event{border-radius:3px;padding:1px 3px;font-size:9px;font-weight:600;margin-bottom:1px;line-height:1.4;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.cal-event.work{background:#dbeafe;color:#1e40af}
+.cal-event.off{background:#f3f4f6;color:#6b7280}
+.cal-event.paid{background:#dcfce7;color:#166534}
+.cal-legend{display:flex;gap:10px;padding:8px 14px;background:#fff;border-top:0.5px solid #f0f0f0;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:4px;font-size:11px;color:#555}
+.legend-dot{width:9px;height:9px;border-radius:2px}
+/* views */
+#viewSummary,#viewShift,#viewCal,#viewJobs,#viewSettings{display:none}
+#viewSummary{display:block}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="topbar-title">📋 シフト管理</span>
+  <div class="topbar-right">
+    <button class="sync-btn" onclick="syncAll()" id="syncBtn">🔄 同期</button>
+  </div>
+</div>
+
+<!-- バイト先フィルタバー -->
+<div class="job-bar" id="jobBar"></div>
+
+<!-- セットアップ -->
+<div id="setupCard" class="setup-card" style="display:none">
+  ⚙️ <strong>初回設定が必要です</strong><br>
+  スマホ・タブレット対応には <strong>Cloudflare Worker URL</strong> を設定してください。<br>
+  詳細は「⚙️ 設定」タブから入力できます。<br>
+  <button class="gas-save-btn" onclick="switchView('settings')" style="margin-top:8px">⚙️ 設定画面を開く</button>
+</div>
+
+<!-- ====== サマリービュー ====== -->
+<div id="viewSummary">
+  <div class="summary-wrap">
+    <div class="summary-total">
+      <div class="summary-total-label">今月の総支給額（全バイト合計）</div>
+      <div class="summary-total-row">
+        <div class="summary-total-val" id="totalAmt">¥0</div>
+        <div class="summary-total-sub" id="totalSub">実働 0h00m</div>
+      </div>
+    </div>
+    <div class="job-summaries" id="jobSummaries"></div>
+  </div>
+  <!-- 月選択 -->
+  <div style="display:flex;justify-content:center;align-items:center;gap:16px;padding:8px 14px">
+    <button class="cal-nav-btn" onclick="summaryMonthPrev()">‹</button>
+    <span id="summaryMonthLabel" style="font-size:14px;font-weight:600"></span>
+    <button class="cal-nav-btn" onclick="summaryMonthNext()">›</button>
+  </div>
+</div>
+
+<!-- ====== シフト一覧ビュー ====== -->
+<div id="viewShift">
+  <div class="section" style="margin-top:8px">
+    <div id="shiftList"><div class="loading">読み込み中...</div></div>
+    <button class="add-btn" onclick="addRow()">＋ シフトを追加</button>
+  </div>
+</div>
+
+<!-- ====== カレンダービュー ====== -->
+<div id="viewCal">
+  <div class="cal-nav">
+    <button class="cal-nav-btn" onclick="calPrev()">‹</button>
+    <span class="cal-month" id="calMonth"></span>
+    <button class="cal-nav-btn" onclick="calNext()">›</button>
+  </div>
+  <div class="cal-grid" id="calGrid"></div>
+  <div class="cal-legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#dbeafe"></div>出勤</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#dcfce7"></div>有給</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f3f4f6"></div>休日</div>
+  </div>
+</div>
+
+<!-- ====== バイト先設定ビュー ====== -->
+<div id="viewJobs">
+  <div class="section" style="margin-top:8px">
+    <div id="jobList"></div>
+    <button class="add-btn-outline" onclick="addJob()">＋ バイト先を追加</button>
+  </div>
+</div>
+
+<!-- ====== 設定ビュー ====== -->
+<div id="viewSettings">
+  <div class="section" style="margin-top:8px">
+    <div class="card">
+      <div style="background:#fff8e1;padding:10px 14px;font-size:12px;color:#7a5c00;line-height:1.7;border-bottom:1px solid #f0f0f0">
+        ⚙️ <strong>接続設定</strong><br>
+        Cloudflare WorkerのURLを入力してください。<br>
+        GAS URLを直接使うとスマホ・タブレットでCORSエラーが発生します。
+      </div>
+      <div class="card-row" style="flex-direction:column;align-items:flex-start;gap:8px">
+        <span class="row-label">Cloudflare Worker URL<small>スマホ・タブレット対応プロキシ</small></span>
+        <input type="url" id="settingsWorkerUrl" placeholder="https://your-worker.workers.dev" style="width:100%;font-size:13px;padding:7px 9px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#1a1a1a;height:38px">
+      </div>
+      <div class="card-row" style="flex-direction:column;align-items:flex-start;gap:8px">
+        <span class="row-label">GAS URL<small>Cloudflare Workerのコード内にも貼り付けてください</small></span>
+        <input type="url" id="settingsGasUrl" placeholder="https://script.google.com/macros/s/.../exec" style="width:100%;font-size:13px;padding:7px 9px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#1a1a1a;height:38px">
+      </div>
+      <div class="card-row">
+        <button onclick="saveSettingsUrls()" style="width:100%;background:#0071e3;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;padding:10px;cursor:pointer">💾 保存して再接続</button>
+      </div>
+    </div>
+    <div class="card" style="margin-top:4px">
+      <div class="card-row">
+        <span class="row-label">接続状態</span>
+        <span id="gasUrlStatus" style="font-size:13px;color:#888">—</span>
+      </div>
+      <div class="card-row" style="flex-direction:column;align-items:flex-start;gap:6px">
+        <span class="row-label">接続テスト</span>
+        <button onclick="testConnection()" style="background:#f0f7ff;border:1px solid #b3d4f5;color:#0071e3;border-radius:8px;font-size:13px;padding:7px 14px;cursor:pointer">🔗 接続テストを実行</button>
+        <span id="testResult" style="font-size:12px;color:#888;margin-top:4px;display:block"></span>
+      </div>
+    </div>
+    <div class="card" style="margin-top:4px">
+      <div class="card-row" style="flex-direction:column;align-items:flex-start;gap:6px">
+        <span class="row-label">データ操作</span>
+        <button onclick="syncAll()" style="background:#f0f7ff;border:1px solid #b3d4f5;color:#0071e3;border-radius:8px;font-size:13px;padding:7px 14px;cursor:pointer">🔄 全データを再同期</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ボトムナビ -->
+<div class="bottom-nav">
+  <button class="nav-btn active" id="navSummary" onclick="switchView('summary')"><span class="nav-icon">📊</span>サマリー</button>
+  <button class="nav-btn" id="navShift" onclick="switchView('shift')"><span class="nav-icon">📋</span>シフト</button>
+  <button class="nav-btn" id="navCal" onclick="switchView('cal')"><span class="nav-icon">📅</span>カレンダー</button>
+  <button class="nav-btn" id="navJobs" onclick="switchView('jobs')"><span class="nav-icon">🏢</span>バイト先</button>
+  <button class="nav-btn" id="navSettings" onclick="switchView('settings')"><span class="nav-icon">⚙️</span>設定</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===== 定数 ===== */
+const HOLIDAYS=new Set(['2024-01-01','2024-01-08','2024-02-11','2024-02-12','2024-02-23','2024-03-20','2024-04-29','2024-05-03','2024-05-04','2024-05-05','2024-05-06','2024-07-15','2024-08-11','2024-08-12','2024-09-16','2024-09-22','2024-09-23','2024-10-14','2024-11-03','2024-11-04','2024-11-23','2025-01-01','2025-01-13','2025-02-11','2025-02-23','2025-02-24','2025-03-20','2025-04-29','2025-05-03','2025-05-04','2025-05-05','2025-05-06','2025-07-21','2025-08-11','2025-09-15','2025-09-23','2025-10-13','2025-11-03','2025-11-23','2025-11-24','2026-01-01','2026-01-12','2026-02-11','2026-02-23','2026-03-20','2026-04-29','2026-05-03','2026-05-04','2026-05-05','2026-05-06','2026-07-20','2026-08-11','2026-09-21','2026-09-22','2026-09-23','2026-10-12','2026-11-03','2026-11-23']);
+const DAY=['日','月','火','水','木','金','土'];
+const JOB_COLORS=['#0071e3','#e05a00','#34a853','#9333ea','#e03030','#0891b2','#b45309'];
+
+/* ===== State ===== */
+let jobs=[], rows=[], nextId=1, nextJobId=1;
+let gasUrl='', workerUrl='', settingTimer=null;
+let currentView='summary', filterJobId='all';
+let calYear=new Date().getFullYear(), calMonth=new Date().getMonth();
+let summaryYear=new Date().getFullYear(), summaryMonth=new Date().getMonth();
+
+/* ===== GAS URL ===== */
+function loadGasUrl(){
+  gasUrl=(localStorage.getItem('shiftGasUrl')||'').replace(/\/+$/,'');
+  workerUrl=(localStorage.getItem('shiftWorkerUrl')||'').replace(/\/+$/,'');
+  if(workerUrl) localStorage.setItem('shiftWorkerUrl',workerUrl);
+  if(gasUrl)    localStorage.setItem('shiftGasUrl',gasUrl);
+  if(!workerUrl&&!gasUrl) document.getElementById('setupCard').style.display='block';
+}
+function saveGasUrl(){
+  const u=document.getElementById('gasUrlInput').value.trim();
+  if(!u||!u.includes('script.google.com')){showToast('URLを確認してください');return;}
+  gasUrl=u; localStorage.setItem('shiftGasUrl',u);
+  document.getElementById('setupCard').style.display='none';
+  showToast('接続します...'); loadAll();
+}
+function saveSettingsUrls(){
+  let wUrl=document.getElementById('settingsWorkerUrl').value.trim().replace(/\/+$/,'');
+  let gUrl=document.getElementById('settingsGasUrl').value.trim().replace(/\/+$/,'');
+  if(!wUrl&&!gUrl){showToast('URLを入力してください');return;}
+  if(wUrl){
+    if(!wUrl.includes('https://')){showToast('Worker URLを確認してください');return;}
+    workerUrl=wUrl; localStorage.setItem('shiftWorkerUrl',wUrl);
+  }
+  if(gUrl){
+    if(!gUrl.includes('script.google.com')){showToast('GAS URLを確認してください');return;}
+    gasUrl=gUrl; localStorage.setItem('shiftGasUrl',gUrl);
+  }
+  document.getElementById('setupCard').style.display='none';
+  showToast('保存しました → 再接続します...');
+  renderSettingsView();
+  loadAll();
+}
+
+/* ===== API ===== */
+/* 接続先を返す：Worker優先、なければGAS直接 */
+function getEndpoint(){ return (workerUrl||gasUrl).replace(/\/+$/,''); }
+
+async function gasGet(params){
+  const endpoint=getEndpoint();
+  if(!endpoint) throw new Error('接続先URLが設定されていません');
+  /* URLSearchParamsで確実にクエリを組み立て */
+  const qs=new URLSearchParams(params).toString();
+  const fullUrl=endpoint+'?'+qs;
+  const res=await fetch(fullUrl,{
+    method:'GET',
+    redirect:'follow',
+    headers:{'Accept':'application/json'}
+  });
+  if(!res.ok) throw new Error('HTTP '+res.status);
+  const text=await res.text();
+  try{ return JSON.parse(text); }
+  catch{ throw new Error('不正なレスポンス: '+text.slice(0,120)); }
+}
+
+async function gasPost(data){
+  const endpoint=getEndpoint();
+  if(!endpoint) throw new Error('接続先URLが設定されていません');
+  /* payloadをURLSearchParamsでエンコード */
+  const qs=new URLSearchParams({payload:JSON.stringify(data)}).toString();
+  const fullUrl=endpoint+'?'+qs;
+  const res=await fetch(fullUrl,{
+    method:'GET',
+    redirect:'follow',
+    headers:{'Accept':'application/json'}
+  });
+  if(!res.ok) throw new Error('HTTP '+res.status);
+  const text=await res.text();
+  try{ return JSON.parse(text); }
+  catch{ throw new Error('不正なレスポンス: '+text.slice(0,120)); }
+}
+
+/* ===== Load ===== */
+async function loadAll(){
+  if(!gasUrl){renderAll();return;}
+  try{
+    const r=await gasGet({action:'getAll'});
+    if(r.error) throw new Error(r.error);
+    if(r.jobs)   { jobs=r.jobs; nextJobId=jobs.length?Math.max(...jobs.map(j=>Number(j.id)||0))+1:1; }
+    if(r.shifts) { rows=r.shifts; nextId=rows.length?Math.max(...rows.map(r=>Number(r.id)||0))+1:1; }
+    renderAll();
+    showToast('✅ 読み込み完了');
+  }catch(e){
+    showErrBanner('読み込み失敗：'+e.message);
+    renderAll();
+  }
+}
+
+async function syncAll(){
+  if(!gasUrl){document.getElementById('setupCard').style.display='block';return;}
+  const btn=document.getElementById('syncBtn');
+  btn.textContent='同期中...';btn.className='sync-btn saving';
+  clearErrBanner();
+  try{ await loadAll(); }catch(e){ showToast('❌ 同期失敗'); }
+  finally{ btn.textContent='🔄 同期';btn.className='sync-btn'; }
+}
+
+/* ===== 計算ユーティリティ ===== */
+function fmtHM(m){if(m<=0)return'0h00m';return Math.floor(m/60)+'h'+String(m%60).padStart(2,'0')+'m';}
+function fmtTime(t){if(!t)return'';const[h,m]=(t+':00').split(':');return String(parseInt(h||0)).padStart(2,'0')+':'+String(parseInt(m||0)).padStart(2,'0');}
+function toMins(t){if(!t)return null;const[h,m]=t.split(':').map(Number);return h*60+m;}
+function lawBreak(raw){if(raw>480)return 60;if(raw>360)return 45;return 0;}
+function nightOv(s,e){let end=e<=s?e+1440:e,t=0;for(const[ns,ne]of[[0,300],[1320,1740]])t+=Math.max(0,Math.min(end,ne)-Math.max(s,ns));return Math.min(t,end-s);}
+function segOv(s,e,ns,ne){let end=e<=s?e+1440:e,t=0;t+=Math.max(0,Math.min(end,ne)-Math.max(s,ns));t+=Math.max(0,Math.min(end,ne+1440)-Math.max(s,ns+1440));return Math.min(t,end-s);}
+
+function getJob(jobId){ return jobs.find(j=>String(j.id)===String(jobId))||null; }
+
+function calcRow(r){
+  const job=getJob(r.jobId);
+  if(!job) return null;
+  const base=Number(job.hourlyRate)||0;
+  const std=(Number(job.stdHours)||8)*60;
+  const otR=Number(job.otRate)||1.25;
+  const nR=Number(job.nightRate)||1.25;
+  const nEx=nR-1;
+  const d=r.date; const dt=d?new Date(d):null;
+  const dow=dt?dt.getDay():null;
+  const weHol=dt&&(dow===0||dow===6||HOLIDAYS.has(d));
+
+  if(r.type==='paid'){
+    const amt=job.paidBase==='custom'?(Number(job.paidCustom)||0):base*8;
+    return{workMins:480,otMins:0,nightMins:0,breakMins:0,total:amt,upLabels:[]};
+  }
+  if(r.type==='off') return{workMins:0,otMins:0,nightMins:0,breakMins:0,total:0,upLabels:[]};
+
+  const s=toMins(r.start),e=toMins(r.end);
+  if(s===null||e===null) return null;
+  let raw=e-s; if(raw<=0)raw+=1440;
+  const brk=r.autoBreak?lawBreak(raw):(Number(r.manualBreak)||0);
+  const work=Math.max(0,raw-brk);
+  const nm=nightOv(s,e), ot=Math.max(0,work-std), norm=work-ot;
+  const nn=Math.min(nm,norm), on=Math.min(nm-nn,ot), nd=norm-nn, od=ot-on;
+  const basePay=Math.round((nd/60)*base+(nn/60)*base*(1+nEx)+(od/60)*base*otR+(on/60)*base*(otR+nEx));
+
+  const upW=job.enWeekend?(Number(job.upWeekend)||0):0;
+  const upM=job.enMorning?(Number(job.upMorning)||0):0;
+  const upE=job.enEvening?(Number(job.upEvening)||0):0;
+  const span=e<=s?e+1440-s:e-s, ratio=span>0?work/span:1;
+  const mM=Math.round(segOv(s,e,300,540)*ratio), eM=Math.round(segOv(s,e,1020,1320)*ratio);
+  const wPay=weHol?Math.round((work/60)*upW):0;
+  const mPay=Math.round((mM/60)*upM), ePay=Math.round((eM/60)*upE);
+  const upLabels=[];
+  if(wPay>0)upLabels.push('土日祝+'+upW+'円');
+  if(mPay>0)upLabels.push('早朝+'+upM+'('+fmtHM(mM)+')');
+  if(ePay>0)upLabels.push('夕方+'+upE+'('+fmtHM(eM)+')');
+  return{workMins:work,otMins:ot,nightMins:nm,breakMins:brk,total:basePay+wPay+mPay+ePay,upLabels};
+}
+
+/* ===== フィルタ済みrows ===== */
+function filteredRows(){
+  return filterJobId==='all'?rows:rows.filter(r=>String(r.jobId)===String(filterJobId));
+}
+
+/* ===== renderAll ===== */
+function renderAll(){
+  renderJobBar();
+  renderJobList();
+  if(currentView==='summary') renderSummary();
+  else if(currentView==='shift') renderShiftList();
+  else if(currentView==='cal') renderCal();
+}
+
+/* ===== バイト先バー ===== */
+function renderJobBar(){
+  const bar=document.getElementById('jobBar');
+  bar.innerHTML='';
+  const allChip=document.createElement('button');
+  allChip.className='job-chip'+(filterJobId==='all'?' active':'');
+  if(filterJobId==='all') allChip.style.background='#0071e3';
+  allChip.innerHTML='<span class="dot" style="background:'+(filterJobId==='all'?'#fff':'#aaa')+'"></span>すべて';
+  allChip.onclick=()=>{filterJobId='all';renderAll();};
+  bar.appendChild(allChip);
+  jobs.forEach(j=>{
+    const chip=document.createElement('button');
+    const active=String(filterJobId)===String(j.id);
+    chip.className='job-chip'+(active?' active':'');
+    if(active) chip.style.background=j.color||'#0071e3';
+    chip.innerHTML=`<span class="dot" style="background:${active?'#fff':j.color||'#0071e3'}"></span>${j.name||'未設定'}`;
+    chip.onclick=()=>{filterJobId=String(j.id);renderAll();};
+    bar.appendChild(chip);
+  });
+}
+
+/* ===== サマリー ===== */
+function renderSummary(){
+  const MONTH_JP=['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  document.getElementById('summaryMonthLabel').textContent=summaryYear+'年 '+MONTH_JP[summaryMonth];
+  const ym=`${summaryYear}-${String(summaryMonth+1).padStart(2,'0')}`;
+  const monthRows=rows.filter(r=>r.date&&r.date.startsWith(ym));
+  let totalAmt=0,totalWork=0;
+  const jobGrid=document.getElementById('jobSummaries');
+  jobGrid.innerHTML='';
+  jobs.forEach(j=>{
+    const jRows=monthRows.filter(r=>String(r.jobId)===String(j.id));
+    let amt=0,work=0;
+    jRows.forEach(r=>{const res=calcRow(r);if(res){amt+=res.total;work+=res.workMins;}});
+    totalAmt+=amt;totalWork+=work;
+    const card=document.createElement('div');
+    card.className='job-sum-card';
+    card.style.borderLeftColor=j.color||'#ccc';
+    card.innerHTML=`<div class="job-sum-name">${j.name||'未設定'}</div>
+      <div class="job-sum-amt">¥${amt.toLocaleString()}</div>
+      <div class="job-sum-sub">実働 ${fmtHM(work)} / ${jRows.length}日</div>`;
+    jobGrid.appendChild(card);
+  });
+  if(!jobs.length){
+    jobGrid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:16px;color:#aaa;font-size:13px">バイト先を登録してください</div>';
+  }
+  document.getElementById('totalAmt').textContent='¥'+totalAmt.toLocaleString();
+  document.getElementById('totalSub').textContent='実働 '+fmtHM(totalWork);
+}
+function summaryMonthPrev(){summaryMonth--;if(summaryMonth<0){summaryMonth=11;summaryYear--;}renderSummary();}
+function summaryMonthNext(){summaryMonth++;if(summaryMonth>11){summaryMonth=0;summaryYear++;}renderSummary();}
+
+/* ===== シフト一覧 ===== */
+function renderShiftList(){
+  const list=document.getElementById('shiftList');
+  list.innerHTML='';
+  if(!jobs.length){
+    list.innerHTML='<div class="loading" style="padding:20px;color:#bbb">先に「バイト先」タブでバイト先を追加してください</div>';
+    return;
+  }
+  const fr=filteredRows().slice().sort((a,b)=>(a.date||'')>(b.date||'')?-1:1);
+  if(!fr.length){
+    list.innerHTML='<div class="loading" style="padding:16px;color:#bbb">シフトがありません<br><span style="font-size:12px">下の「＋ シフトを追加」から追加</span></div>';
+    return;
+  }
+  fr.forEach(r=>{
+    const i=rows.indexOf(r);
+    const res=calcRow(r);
+    const job=getJob(r.jobId);
+    const d=r.date?new Date(r.date):null;
+    const dow=d?d.getDay():null;
+    const isHol=r.date&&HOLIDAYS.has(r.date);
+    const dayLabel=d?DAY[dow]+(isHol?'(祝)':''):'—';
+    const dayCls=isHol?'hol':(dow===0?'sun':dow===6?'sat':'');
+    let cls='shift-card';
+    if(r.type==='paid')cls+=' paid';
+    else if(res&&res.otMins>0)cls+=' ot';
+    else if(res&&res.nightMins>0)cls+=' night';
+
+    const div=document.createElement('div');div.className=cls;
+    const typeOpts=['work','paid','off'].map(v=>`<option value="${v}"${r.type===v?' selected':''}>${{work:'出勤',paid:'有給',off:'休日'}[v]}</option>`).join('');
+    const jobOpts=jobs.map(j=>`<option value="${j.id}"${String(r.jobId)===String(j.id)?' selected':''}>${j.name||'未設定'}</option>`).join('');
+    const fs=fmtTime(r.start),fe=fmtTime(r.end);
+    let timeHTML='';
+    if(r.type==='work'){
+      timeHTML=`<div class="time-grid">
+        <div class="time-field"><label>出勤</label><input type="time" value="${fs}" onchange="setVal(${i},'start',this.value)"></div>
+        <div class="time-field"><label>退勤</label><input type="time" value="${fe}" onchange="setVal(${i},'end',this.value)"></div>
+      </div>`;
+    }
+    let brkHTML='';
+    if(r.type==='work'&&res){
+      if(r.autoBreak) brkHTML=`<div class="brk-row"><span class="brk-label">☕ 休憩 ${res.breakMins}分（法定）</span><button class="brk-btn del" onclick="toggleBreak(${i},false)">削除</button></div>`;
+      else if(!Number(r.manualBreak)) brkHTML=`<div class="brk-row"><span class="brk-label" style="color:#aaa">☕ 休憩なし</span><button class="brk-btn add" onclick="toggleBreak(${i},true)">自動追加</button></div>`;
+      else brkHTML=`<div class="brk-row"><span class="brk-label">☕ 休憩</span><input type="number" style="width:60px;font-size:13px;padding:3px 6px;border:1px solid #ddd;border-radius:7px;height:30px;text-align:right;background:#fff;color:#1a1a1a" value="${r.manualBreak}" onchange="setVal(${i},'manualBreak',parseInt(this.value)||0)"><span class="brk-label">分</span><button class="brk-btn del" onclick="clearBreak(${i})">削除</button></div>`;
+    }
+    const amtStr=res&&r.type!=='off'?'¥'+res.total.toLocaleString():'—';
+    let amtCls='amount';if(r.type==='paid')amtCls+=' paid';else if(res&&res.otMins>0)amtCls+=' ot';
+    const pills=[];
+    if(res&&r.type!=='off'){
+      pills.push(`<span class="pill work">実働 ${r.type==='paid'?'8h00m':fmtHM(res.workMins)}</span>`);
+      if(res.otMins>0)pills.push(`<span class="pill ot">残業 ${fmtHM(res.otMins)}</span>`);
+      if(res.nightMins>0)pills.push(`<span class="pill night">深夜 ${fmtHM(res.nightMins)}</span>`);
+      res.upLabels.forEach(l=>pills.push(`<span class="pill up">${l}</span>`));
+    }
+    div.innerHTML=`
+      <div class="shift-header">
+        <div class="shift-header-left">
+          <input type="date" value="${r.date||''}" style="font-size:13px;padding:3px 7px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#1a1a1a;height:32px;width:140px" onchange="setVal(${i},'date',this.value)">
+          <span class="day-badge ${dayCls}">${dayLabel}</span>
+          <span class="job-tag" style="background:${job?job.color||'#aaa':'#aaa'}">${job?job.name||'?':'?'}</span>
+        </div>
+        <button class="del-btn" onclick="delRow(${i})">削除</button>
+      </div>
+      <div class="shift-body">
+        <div style="margin-bottom:7px;display:flex;gap:7px;flex-wrap:wrap">
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <label style="font-size:12px;color:#888">種別</label>
+            <select style="font-size:13px;padding:3px 7px;border:1px solid #ddd;border-radius:7px;background:#fff;color:#1a1a1a;height:32px" onchange="setVal(${i},'type',this.value)">${typeOpts}</select>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <label style="font-size:12px;color:#888">バイト先</label>
+            <select style="font-size:13px;padding:3px 7px;border:1px solid #ddd;border-radius:7px;background:#fff;color:#1a1a1a;height:32px" onchange="setVal(${i},'jobId',this.value)">${jobOpts}</select>
+          </div>
+        </div>
+        ${timeHTML}${r.type==='work'&&res?brkHTML:''}
+      </div>
+      <div class="shift-footer"><div class="pills">${pills.join('')}</div><div class="${amtCls}">${amtStr}</div></div>`;
+    list.appendChild(div);
+  });
+}
+
+/* ===== カレンダー ===== */
+function renderCal(){
+  const MONTH_JP=['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  document.getElementById('calMonth').textContent=calYear+'年 '+MONTH_JP[calMonth];
+  const fr=filteredRows();
+  const rowMap={};
+  fr.forEach(r=>{if(r.date){if(!rowMap[r.date])rowMap[r.date]=[];rowMap[r.date].push(r);}});
+  const grid=document.getElementById('calGrid');grid.innerHTML='';
+  DAY.forEach(d=>{const el=document.createElement('div');el.className='cal-dow';el.textContent=d;grid.appendChild(el);});
+  const firstDay=new Date(calYear,calMonth,1).getDay();
+  const lastDate=new Date(calYear,calMonth+1,0).getDate();
+  const prevLast=new Date(calYear,calMonth,0).getDate();
+  const today=new Date().toISOString().slice(0,10);
+  let cells=[];
+  for(let i=firstDay-1;i>=0;i--) cells.push({d:prevLast-i,other:true});
+  for(let d=1;d<=lastDate;d++) cells.push({d,other:false});
+  while(cells.length<42) cells.push({d:cells.length-lastDate-firstDay+1,other:true});
+  cells.forEach((c,idx)=>{
+    const cell=document.createElement('div');
+    const dow=idx%7;
+    const dateStr=!c.other?`${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(c.d).padStart(2,'0')}`:null;
+    const isHol=dateStr&&HOLIDAYS.has(dateStr);
+    let cls='cal-cell';
+    if(c.other)cls+=' other-month';
+    if(dow===0||isHol)cls+=' sun';else if(dow===6)cls+=' sat';
+    if(isHol)cls+=' hol';
+    if(dateStr===today)cls+=' today';
+    cell.className=cls;
+    const dayEl=document.createElement('div');dayEl.className='cal-day';dayEl.textContent=c.d;cell.appendChild(dayEl);
+    if(dateStr&&rowMap[dateStr]){
+      rowMap[dateStr].forEach(r=>{
+        const job=getJob(r.jobId);
+        const ev=document.createElement('div');
+        if(r.type==='work'){
+          ev.className='cal-event work';
+          if(job) ev.style.background=job.color+'22';
+          if(job) ev.style.color=job.color;
+          const s=fmtTime(r.start),e=fmtTime(r.end);
+          ev.textContent=(job?job.name+' ':'')+( s&&e?s+'〜'+e:'出勤');
+        } else if(r.type==='paid'){
+          ev.className='cal-event paid';
+          ev.textContent=(job?job.name+' ':'')+'有給';
+        } else {
+          ev.className='cal-event off';
+          ev.textContent=(job?job.name+' ':'')+'休日';
+        }
+        cell.appendChild(ev);
+      });
+    }
+    grid.appendChild(cell);
+  });
+}
+function calPrev(){calMonth--;if(calMonth<0){calMonth=11;calYear--;}renderCal();}
+function calNext(){calMonth++;if(calMonth>11){calMonth=0;calYear++;}renderCal();}
+
+/* ===== バイト先設定 ===== */
+function renderJobList(){
+  const list=document.getElementById('jobList');list.innerHTML='';
+  if(!jobs.length){list.innerHTML='<div class="loading" style="padding:16px;color:#bbb">バイト先が登録されていません</div>';return;}
+  jobs.forEach((j,ji)=>{
+    const div=document.createElement('div');div.className='job-edit-card';
+    div.innerHTML=`
+      <div class="job-edit-header">
+        <div class="job-edit-name"><span class="job-dot" style="background:${j.color||'#aaa'}"></span>${j.name||'未設定'}</div>
+        <div class="job-edit-btns">
+          <button class="btn-sm btn-edit" onclick="toggleJobEdit(${ji})">編集</button>
+          <button class="btn-sm btn-del-job" onclick="delJob(${ji})">削除</button>
+        </div>
+      </div>
+      <div class="job-edit-body" id="jobEditBody_${ji}">
+        <div class="card-row"><span class="row-label">名前</span><div class="row-ctrl"><input type="text" value="${j.name||''}" onchange="setJobVal(${ji},'name',this.value)"></div></div>
+        <div class="card-row"><span class="row-label">カラー</span><div class="row-ctrl"><input type="color" value="${j.color||'#0071e3'}" onchange="setJobVal(${ji},'color',this.value)"></div></div>
+        <div class="card-row"><span class="row-label">時給</span><div class="row-ctrl"><input type="number" value="${j.hourlyRate||1000}" min="0" step="10" onchange="setJobVal(${ji},'hourlyRate',Number(this.value))"><span style="font-size:13px;color:#888">円</span></div></div>
+        <div class="card-row"><span class="row-label">所定時間</span><div class="row-ctrl"><input type="number" value="${j.stdHours||8}" min="1" max="10" step="0.5" style="width:72px" onchange="setJobVal(${ji},'stdHours',Number(this.value))"><span style="font-size:13px;color:#888">h</span></div></div>
+        <div class="card-row"><span class="row-label">残業割増</span><div class="row-ctrl"><select onchange="setJobVal(${ji},'otRate',Number(this.value))">
+          <option value="1.25"${(Number(j.otRate)||1.25)===1.25?' selected':''}>×1.25（法定）</option>
+          <option value="1.35"${Number(j.otRate)===1.35?' selected':''}>×1.35</option>
+          <option value="1.5"${Number(j.otRate)===1.5?' selected':''}>×1.50</option>
+        </select></div></div>
+        <div class="card-row"><span class="row-label">深夜割増</span><div class="row-ctrl"><select onchange="setJobVal(${ji},'nightRate',Number(this.value))">
+          <option value="1.25"${(Number(j.nightRate)||1.25)===1.25?' selected':''}>×1.25（法定）</option>
+          <option value="1.35"${Number(j.nightRate)===1.35?' selected':''}>×1.35</option>
+          <option value="1.5"${Number(j.nightRate)===1.5?' selected':''}>×1.50</option>
+        </select></div></div>
+        <div class="card-row"><span class="row-label">有給単価</span><div class="row-ctrl">
+          <select onchange="setJobVal(${ji},'paidBase',this.value);document.getElementById('paidCustom_${ji}').style.display=this.value==='custom'?'inline-block':'none'">
+            <option value="hourly"${j.paidBase!=='custom'?' selected':''}>時給×8h</option>
+            <option value="custom"${j.paidBase==='custom'?' selected':''}>カスタム</option>
+          </select>
+          <input type="number" id="paidCustom_${ji}" value="${j.paidCustom||0}" style="width:80px;display:${j.paidBase==='custom'?'inline-block':'none'}" onchange="setJobVal(${ji},'paidCustom',Number(this.value))">
+        </div></div>
+        <div class="up-row"><span class="row-label">土日祝UP</span><div class="up-ctrl"><input type="number" value="${j.upWeekend||0}" min="0" step="10" onchange="setJobVal(${ji},'upWeekend',Number(this.value))"><span style="font-size:13px;color:#888">円</span><label><input type="checkbox" ${j.enWeekend?'checked':''} onchange="setJobVal(${ji},'enWeekend',this.checked)"> 有効</label></div></div>
+        <div class="up-row"><span class="row-label">早朝5〜9時</span><div class="up-ctrl"><input type="number" value="${j.upMorning||0}" min="0" step="10" onchange="setJobVal(${ji},'upMorning',Number(this.value))"><span style="font-size:13px;color:#888">円</span><label><input type="checkbox" ${j.enMorning?'checked':''} onchange="setJobVal(${ji},'enMorning',this.checked)"> 有効</label></div></div>
+        <div class="up-row"><span class="row-label">夕方17〜22時</span><div class="up-ctrl"><input type="number" value="${j.upEvening||0}" min="0" step="10" onchange="setJobVal(${ji},'upEvening',Number(this.value))"><span style="font-size:13px;color:#888">円</span><label><input type="checkbox" ${j.enEvening?'checked':''} onchange="setJobVal(${ji},'enEvening',this.checked)"> 有効</label></div></div>
+        <div class="hint">休憩：6h超〜8h以下→45分 / 8h超→60分</div>
+      </div>`;
+    list.appendChild(div);
+  });
+}
+
+function toggleJobEdit(ji){
+  const body=document.getElementById('jobEditBody_'+ji);
+  body.style.display=body.style.display==='block'?'none':'block';
+}
+
+function addJob(){
+  const color=JOB_COLORS[jobs.length%JOB_COLORS.length];
+  const j={id:nextJobId++,name:'バイト'+(jobs.length+1),color,hourlyRate:1000,stdHours:8,
+    otRate:1.25,nightRate:1.25,paidBase:'hourly',paidCustom:0,
+    upWeekend:0,enWeekend:false,upMorning:0,enMorning:false,upEvening:0,enEvening:false};
+  jobs.push(j);renderAll();
+  gasPost({action:'saveJob',data:j}).then(()=>showToast('✅ バイト先を追加しました')).catch(()=>{});
+}
+
+function delJob(ji){
+  if(!confirm('「'+jobs[ji].name+'」を削除しますか？関連シフトは残ります。')) return;
+  const id=jobs[ji].id; jobs.splice(ji,1); renderAll();
+  gasPost({action:'deleteJob',id:String(id)}).then(()=>showToast('🗑 削除しました')).catch(()=>{});
+}
+
+function setJobVal(ji,k,v){
+  jobs[ji][k]=v;renderAll();
+  clearTimeout(jobs[ji]._t);
+  jobs[ji]._t=setTimeout(()=>gasPost({action:'saveJob',data:jobs[ji]}).then(()=>showToast('💾 保存しました')).catch(()=>{}),800);
+}
+
+/* ===== シフト操作 ===== */
+function addRow(){
+  if(!jobs.length){showToast('先にバイト先を追加してください');switchView('jobs');return;}
+  const today=new Date().toISOString().slice(0,10);
+  const jobId=filterJobId==='all'?jobs[0].id:filterJobId;
+  const r={id:nextId++,jobId:String(jobId),date:today,type:'work',start:'09:00',end:'18:00',autoBreak:true,manualBreak:0};
+  rows.push(r);renderAll();
+  gasPost({action:'saveShift',data:r}).then(()=>showToast('✅ 追加しました')).catch(()=>{});
+}
+
+function delRow(i){
+  const id=rows[i].id; rows.splice(i,1); renderAll();
+  gasPost({action:'deleteShift',id:String(id)}).then(()=>showToast('🗑 削除しました')).catch(()=>{});
+}
+
+function setVal(i,k,v){
+  if((k==='start'||k==='end')&&v) v=fmtTime(v);
+  rows[i][k]=v; renderAll();
+  clearTimeout(rows[i]._t);
+  rows[i]._t=setTimeout(()=>gasPost({action:'saveShift',data:rows[i]}).then(()=>showToast('💾 保存しました')).catch(()=>{}),800);
+}
+
+function toggleBreak(i,a){rows[i].autoBreak=a;if(!a)rows[i].manualBreak=0;renderAll();gasPost({action:'saveShift',data:rows[i]}).catch(()=>{});}
+function clearBreak(i){rows[i].manualBreak=0;rows[i].autoBreak=false;renderAll();gasPost({action:'saveShift',data:rows[i]}).catch(()=>{});}
+
+/* ===== 画面切り替え ===== */
+function switchView(view){
+  currentView=view;
+  ['summary','shift','cal','jobs','settings'].forEach(v=>{
+    const el=document.getElementById('view'+v.charAt(0).toUpperCase()+v.slice(1));
+    if(el) el.style.display=v===view?'block':'none';
+    const nav=document.getElementById('nav'+v.charAt(0).toUpperCase()+v.slice(1));
+    if(nav) nav.className='nav-btn'+(v===view?' active':'');
+  });
+  if(view==='summary') renderSummary();
+  else if(view==='shift') renderShiftList();
+  else if(view==='cal') renderCal();
+  else if(view==='jobs') renderJobList();
+  else if(view==='settings') renderSettingsView();
+}
+
+function renderSettingsView(){
+  const wInp=document.getElementById('settingsWorkerUrl');
+  if(wInp) wInp.value=workerUrl||'';
+  const gInp=document.getElementById('settingsGasUrl');
+  if(gInp) gInp.value=gasUrl||'';
+  const status=document.getElementById('gasUrlStatus');
+  if(status){
+    if(workerUrl) status.textContent='✅ Worker経由で接続中';
+    else if(gasUrl) status.textContent='⚠️ GAS直接（PCのみ推奨）';
+    else status.textContent='❌ 未設定';
+    status.style.color=workerUrl?'#1e7e34':gasUrl?'#b45309':'#c62828';
+  }
+  const tr=document.getElementById('testResult');
+  if(tr) tr.textContent='';
+}
+
+function saveSettingsGasUrl(){
+  const u=document.getElementById('settingsGasUrl').value.trim();
+  if(!u){showToast('URLを入力してください');return;}
+  if(!u.includes('script.google.com')){showToast('GAS URLの形式が正しくありません');return;}
+  gasUrl=u;
+  localStorage.setItem('shiftGasUrl',u);
+  document.getElementById('setupCard').style.display='none';
+  const status=document.getElementById('gasUrlStatus');
+  if(status) status.textContent='✅ 設定済み';
+  showToast('URL保存 → 再接続します...');
+  loadAll();
+}
+
+async function testConnection(){
+  const result=document.getElementById('testResult');
+  if(!gasUrl){result.textContent='❌ URLが設定されていません';result.style.color='#c62828';return;}
+  result.textContent='接続テスト中...';result.style.color='#888';
+  try{
+    const r=await gasGet({action:'getAll'});
+    if(r.error) throw new Error(r.error);
+    result.textContent='✅ 接続成功！シフト'+( r.shifts?r.shifts.length:0)+'件 / バイト先'+(r.jobs?r.jobs.length:0)+'件';
+    result.style.color='#1e7e34';
+  }catch(e){
+    result.textContent='❌ 接続失敗：'+e.message;
+    result.style.color='#c62828';
+  }
+}
+
+/* ===== エラーバナー ===== */
+function showErrBanner(msg){
+  clearErrBanner();
+  const d=document.createElement('div');d.className='err-card';d.id='errBanner';
+  d.innerHTML='⚠️ '+msg
+    +'<br><button onclick="retryLoad()" style="margin-top:10px;width:100%;background:#c62828;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;padding:10px;cursor:pointer">🔄 再読み込み</button>'
+    +'<button onclick="showUrlInput()" style="margin-top:8px;width:100%;background:#fff;color:#555;border:1px solid #ccc;border-radius:8px;font-size:14px;padding:10px;cursor:pointer">⚙️ GAS URLを変更する</button>'
+    +'<div id="urlInputArea" style="display:none;margin-top:10px"><input id="retryUrlInput" type="url" placeholder="https://script.google.com/macros/s/..." style="width:100%;font-size:13px;padding:8px 10px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#1a1a1a;height:40px;margin-bottom:8px"><button onclick="applyNewUrl()" style="width:100%;background:#0071e3;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;padding:10px;cursor:pointer">接続する</button></div>';
+  document.getElementById('shiftList').before(d);
+}
+function clearErrBanner(){const el=document.getElementById('errBanner');if(el)el.remove();}
+async function retryLoad(){clearErrBanner();document.getElementById('shiftList').innerHTML='<div class="loading">再読み込み中...</div>';await loadAll();}
+function showUrlInput(){const a=document.getElementById('urlInputArea');if(a){a.style.display='block';const i=document.getElementById('retryUrlInput');if(i&&gasUrl)i.value=gasUrl;}}
+function applyNewUrl(){const i=document.getElementById('retryUrlInput');if(!i)return;const u=i.value.trim();if(!u||!u.includes('script.google.com')){showToast('URLを確認してください');return;}gasUrl=u;localStorage.setItem('shiftGasUrl',u);document.getElementById('setupCard').style.display='none';showToast('URL更新→再接続');retryLoad();}
+
+/* ===== Toast ===== */
+let toastTimer;
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2500);}
+
+/* ===== 起動 ===== */
+loadGasUrl();
+loadAll();
+</script>
+</body>
+</html>
